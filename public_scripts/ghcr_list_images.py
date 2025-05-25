@@ -29,6 +29,9 @@ def main():
         "Authorization": f"Bearer {args.token}",
         "Accept": "application/vnd.github+json"
     }
+    if not args.namespace:
+        print("错误: --namespace 不能为空", file=sys.stderr)
+        sys.exit(1)
 
     print(f"查询 GHCR 镜像（命名空间: {args.namespace}, 类型: {'组织' if args.org else '用户'}）")
     print("-" * 50)

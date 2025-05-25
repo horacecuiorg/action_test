@@ -85,8 +85,9 @@ jobs:
         if: ${{ inputs.ghcr_owner != '' }}
         id: run_ghcr_script
         run: |
+          echo "ghcr_owner is: '${{ inputs.ghcr_owner }}'"
           python public_scripts/ghcr_list_images.py \
-            --namespace "${{ inputs.dockerhub_namespace }}" \
+            --namespace "${{ inputs.ghcr_owner }}" \
             ${{ inputs.ghcr_isUserOrOrg == 'true' && '--org' || '' }} \
             --token "${{ env.GHCR_PAT_ENV }}" # GHCR 脚本仍然需要 token,但现在从 env 传入
 
