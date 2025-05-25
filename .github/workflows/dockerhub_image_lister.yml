@@ -123,4 +123,4 @@ jobs:
 
       - name: Logout from Docker Hub
         if: ${{ inputs.use_dockerhub_auth == true && inputs.dockerhub_namespace != '' && always() }}
-        uses: docker/logout-action@v3
+        uses: docker/logout-action@v2
