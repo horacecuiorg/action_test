@@ -14,6 +14,12 @@ jobs:
       options: --privileged  # 如果需要运行 docker buildx，也可以添加
 
     steps:
+      - name: 查看信息
+        run: |
+          whoami
+          
+
+
       - uses: actions/checkout@v4
 
       - name: Verify Docker and Node
