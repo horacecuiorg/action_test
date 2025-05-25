@@ -1,14 +1,27 @@
-name: List Docker Hub Images
+name: List Container Registry Images (Env Auth)
 
 on:
   workflow_dispatch:
     inputs:
-      namespace:
-        description: 'Docker Hub 用户名或组织名 (Namespace)'
-        required: true
-        default: 'library'
-      use_auth:
+      dockerhub_namespace:
+        description: 'Docker Hub 用户名或组织名 (Namespace)。如果提供，将查询 Docker Hub。'
+        required: false
+        default: ''
+      ghcr_owner:
+        description: 'GHCR 镜像拥有者 (用户名或组织名)。如果提供，将查询 GHCR。'
+        required: false
+        default: ''
+      ghcr_image_name:
+        description: 'GHCR 镜像名称 (如果要查询指定 GHCR 镜像，需要ghcr_owner)。'
+        required: false
+        default: ''
+      use_dockerhub_auth:
         description: '是否使用 Docker Hub 凭据登录 (用于私有仓库或避免速率限制)?'
+        type: boolean
+        required: true
+        default: false
+      use_ghcr_auth:
+        description: '是否使用 GHCR 凭据登录 (用于私有仓库或避免速率限制)?'
         type: boolean
         required: true
         default: false
@@ -17,12 +30,15 @@ jobs:
   list_images:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 需要写入权限才能创建 docker_hub_results.json 文件
+      contents: write # 需要写入权限才能创建结果文件
+      # 如果需要访问 GHCR 私有包，请确保 packages: read 权限
       packages: write # 如果你想将结果上传到 GitHub Packages (可选)
 
-    outputs:
-      results_json_path: ${{ steps.run_script.outputs.docker_hub_results_path }}
-      results_json_string: ${{ steps.run_script.outputs.docker_hub_results_json_string }}
+    env: # 在 Job 级别定义环境变量，从 Secret 中获取值
+      DOCKER_USERNAME_ENV: ${{ secrets.DOCKER_USERNAME }} # 假设你的 Docker Hub 用户名 Secret 叫 DOCKER_USERNAME
+      DOCKER_PASSWORD_ENV: ${{ secrets.DOCKER_PASSWORD }} # 假设你的 Docker Hub 密码 Secret 叫 DOCKER_PASSWORD
+      GHCR_USERNAME_ENV: ${{ secrets.GHCR_USERNAME }}   # 假设你的 GHCR 用户名 Secret 叫 GHCR_USERNAME
+      GHCR_PAT_ENV: ${{ secrets.GHCR_PAT }}         # 假设你的 GHCR PAT Secret 叫 GHCR_PAT
 
     steps:
       - name: Checkout repository
@@ -36,31 +52,75 @@ jobs:
       - name: Install Python dependencies
         run: pip install requests
 
-      - name: Run Docker Hub Image Lister Script
-        id: run_script # 添加 ID 以便引用其输出
-        env:
-          TARGET_NAMESPACE: ${{ inputs.namespace }}
-          USE_DOCKER_HUB_AUTH: ${{ inputs.use_auth }}
-          DOCKER_HUB_USERNAME: ${{ inputs.use_auth == true && secrets.DOCKER_HUB_USERNAME || '' }}
-          DOCKER_HUB_PASSWORD: ${{ inputs.use_auth == true && secrets.DOCKER_HUB_PASSWORD || '' }}
-        run: |
-          python public_scripts/list_dockerhub_images.py
+      # --- Docker Hub 相关步骤 ---
+      - name: Log in to Docker Hub
+        # 仅当 use_dockerhub_auth 为 true 且提供了 dockerhub_namespace 时才执行登录
+        if: ${{ inputs.use_dockerhub_auth == true && inputs.dockerhub_namespace != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKER_USERNAME_ENV }} # 直接引用 Job 级别的环境变量
+          password: ${{ env.DOCKER_PASSWORD_ENV }} # 直接引用 Job 级别的环境变量
 
-      - name: Verify and use JSON output (Example)
+      - name: Run Docker Hub Image Lister Script
+        # 仅当提供了 dockerhub_namespace 时才执行此脚本
+        if: ${{ inputs.dockerhub_namespace != '' }}
+        id: run_dockerhub_script
         run: |
-          echo "JSON file path: ${{ steps.run_script.outputs.docker_hub_results_path }}"
-          # echo "JSON string (if small enough): ${{ steps.run_script.outputs.docker_hub_results_json_string }}"
+          python public_scripts/list_dockerhub_images.py \
+            --namespace "${{ inputs.dockerhub_namespace }}"
+
+      # --- GHCR 相关步骤 ---
+      - name: Log in to GHCR
+        # 仅当 use_ghcr_auth 为 true 且提供了 ghcr_owner 时才执行登录
+        if: ${{ inputs.use_ghcr_auth == true && inputs.ghcr_owner != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ env.GHCR_USERNAME_ENV }} # 直接引用 Job 级别的环境变量
+          password: ${{ env.GHCR_PAT_ENV }}     # 直接引用 Job 级别的环境变量
+
+      - name: Run GHCR Image Lister Script
+        # 仅当提供了 ghcr_owner 时才执行此脚本
+        if: ${{ inputs.ghcr_owner != '' }}
+        id: run_ghcr_script
+        run: |
+          python public_scripts/ghcr_list_images.py \
+            --owner "${{ inputs.ghcr_owner }}" \
+            --image-name "${{ inputs.ghcr_image_name }}" \
+            --github-token "${{ env.GHCR_PAT_ENV }}" # GHCR 脚本仍然需要 token,但现在从 env 传入
+
+
+      # --- 结果汇总和使用步骤 (通用) ---
+      - name: Consolidate and Verify JSON Outputs
+        id: consolidate_results
+        run: |
+          DOCKERHUB_JSON_FILE="dockerhub_results.json"
+          GHCR_JSON_FILE="ghcr_results.json"
           
-          # 从文件中读取JSON数据
-          if [ -f "${{ steps.run_script.outputs.docker_hub_results_path }}" ]; then
-            echo "--- Content of docker_hub_results.json ---"
-            cat "${{ steps.run_script.outputs.docker_hub_results_path }}"
+          echo "--- Consolidating Results ---"
+          
+          if [ -f "$DOCKERHUB_JSON_FILE" ]; then
+            echo "Docker Hub JSON results found at: $DOCKERHUB_JSON_FILE"
+            echo "--- Content of $DOCKERHUB_JSON_FILE ---"
+            cat "$DOCKERHUB_JSON_FILE"
             echo "------------------------------------------"
           else
-            echo "JSON results file not found."
+            echo "No Docker Hub JSON results file found (script may not have run or failed)."
           fi
 
-          # 你可以在这里添加逻辑来将这些JSON数据发送到外部API
-          # curl -X POST -H "Content-Type: application/json" \
-          #      -d "$(cat ${{ steps.run_script.outputs.docker_hub_results_path }})" \
-          #      "YOUR_WEBHOOK_URL"
+          if [ -f "$GHCR_JSON_FILE" ]; then
+            echo "GHCR JSON results found at: $GHCR_JSON_FILE"
+            echo "--- Content of $GHCR_JSON_FILE ---"
+            cat "$GHCR_JSON_FILE"
+            echo "------------------------------------------"
+          else
+            echo "No GHCR JSON results file found (script may not have run or failed)."
+          fi
+
+          # 可以在这里添加逻辑来将这些JSON数据发送到外部API或合并
+          # ... (保持原样或根据需要修改) ...
+
+      - name: Logout from Docker Hub
+        if: ${{ inputs.use_dockerhub_auth == true && inputs.dockerhub_namespace != '' && always() }}
+        uses: docker/logout-action@v3
