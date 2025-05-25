@@ -12,9 +12,9 @@ on:
         required: false
         default: ''
       ghcr_isUserOrOrg:
-        description: 'GHCR owner 时用户还是组织 '
+        description: 'GHCR owner 是用户(false)还是组织(true) '
         required: false
-        default: false
+        default: true
       use_dockerhub_auth:
         description: '是否使用 Docker Hub 凭据登录 (用于私有仓库或避免速率限制)?'
         type: boolean
@@ -37,7 +37,7 @@ jobs:
     env: # 在 Job 级别定义环境变量，从 Secret 中获取值
       DOCKER_USERNAME_ENV: ${{ secrets.DOCKER_USERNAME }} # 假设你的 Docker Hub 用户名 Secret 叫 DOCKER_USERNAME
       DOCKER_PASSWORD_ENV: ${{ secrets.DOCKER_PASSWORD }} # 假设你的 Docker Hub 密码 Secret 叫 DOCKER_PASSWORD
-      GHCR_USERNAME_ENV: ${{ secrets.GHCR_USERNAME }}   # 假设你的 GHCR 用户名 Secret 叫 GHCR_USERNAME
+      GHCR_USERNAME_ENV: ${{ secrets.GHCR_NAMESPACE }}   # 假设你的 GHCR 用户名 Secret 叫 GHCR_USERNAME
       GHCR_PAT_ENV: ${{ secrets.GHCR_PAT }}         # 假设你的 GHCR PAT Secret 叫 GHCR_PAT
 
     steps:
@@ -87,7 +87,7 @@ jobs:
         run: |
           python public_scripts/ghcr_list_images.py \
             --namespace "${{ inputs.dockerhub_namespace }}" \
-            --org \
+            -${{ inputs.ghcr_isUserOrOrg == 'true' && '--org' || '' }} \
             --token "${{ env.GHCR_PAT_ENV }}" # GHCR 脚本仍然需要 token,但现在从 env 传入
 
 
