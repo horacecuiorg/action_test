@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 from urllib.parse import quote
 
+### 不好用，暂时不用
 def fetch_manifest_arch(repo_name, tag, token):
     url = f"https://ghcr.io/v2/{repo_name}/manifests/{tag}"
     headers = {
