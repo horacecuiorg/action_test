@@ -121,6 +121,3 @@ jobs:
           # 可以在这里添加逻辑来将这些JSON数据发送到外部API或合并
           # ... (保持原样或根据需要修改) ...
 
-      - name: Logout from Docker Hub
-        if: ${{ inputs.use_dockerhub_auth == true && inputs.dockerhub_namespace != '' && always() }}
-        uses: docker/logout-action@v2
