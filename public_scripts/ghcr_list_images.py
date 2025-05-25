@@ -125,7 +125,9 @@ def main():
                     formatted_pushed_at = pushed_at
             arch_str = "N/A"
             architectures = []
-            architectures = fetch_manifest_arch(f"{args.namespace}/{name}", tag, args.token)
+            #for tag in tag_names:
+            #    architectures = fetch_manifest_arch(f"{args.namespace}/{name}", tag, args.token)
+            #architectures = fetch_manifest_arch(f"{args.namespace}/{name}", tag_names, args.token)
             for tag in tag_names:
                 image_ref = f"ghcr.io/{args.namespace}/{name}"
                 table_data.append({
