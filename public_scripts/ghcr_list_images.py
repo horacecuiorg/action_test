@@ -5,6 +5,31 @@ import sys
 from datetime import datetime
 from urllib.parse import quote
 
+def fetch_manifest_arch(repo_name, tag, token):
+    url = f"https://ghcr.io/v2/{repo_name}/manifests/{tag}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json"
+    }
+    try:
+        r = requests.get(url, headers=headers)
+        r.raise_for_status()
+        manifest = r.json()
+
+        # 如果是 manifest list（多架构）
+        if manifest.get("mediaType", "").endswith("manifest.list.v2+json"):
+            return [m.get("platform", {}).get("architecture", "unknown") for m in manifest.get("manifests", [])]
+
+        # 如果是单架构镜像
+        elif manifest.get("mediaType", "").endswith("manifest.v2+json"):
+            # 有些 registry 会返回 config 中包含 architecture
+            return [manifest.get("architecture", "unknown")] if "architecture" in manifest else ["unknown"]
+
+    except requests.RequestException as e:
+        print(f"  ⚠️ 获取架构失败: {e}")
+        return ["unknown"]
+
+
 def fetch_packages(namespace, is_org, headers):
     url = f"https://api.github.com/{'orgs' if is_org else 'users'}/{namespace}/packages?package_type=container"
     r = requests.get(url, headers=headers)
@@ -100,6 +125,7 @@ def main():
                     formatted_pushed_at = pushed_at
             arch_str = "N/A"
             architectures = []
+            architectures = fetch_manifest_arch(f"{args.namespace}/{name}", tag, args.token)
             for tag in tag_names:
                 image_ref = f"ghcr.io/{args.namespace}/{name}"
                 table_data.append({
