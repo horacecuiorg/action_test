@@ -19,6 +19,9 @@ jobs:
           whoami
           pwd
           ls -al /
+          echo "Permissions and ownership of /__w/ before steps are run:"
+          ls -ld /__w/ # 查看 /__w/ 目录本身的权限和归属
+          ls -l /__w/  # 查看 /__w/ 目录下内容的权限和归属
 
 
 
