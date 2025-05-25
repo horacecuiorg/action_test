@@ -106,7 +106,7 @@ def main():
                 "architectures": []
             })
             continue
-
+        seen_tags = set()  # 用于记录已处理过的 image_ref:tag
         for version in versions:
             tag_names = version.get("metadata", {}).get("container", {}).get("tags", [])
             if not tag_names:
@@ -130,6 +130,11 @@ def main():
             #architectures = fetch_manifest_arch(f"{args.namespace}/{name}", tag_names, args.token)
             for tag in tag_names:
                 image_ref = f"ghcr.io/{args.namespace}/{name}"
+                tag_key = f"{image_ref}:{tag}"
+                if tag_key in seen_tags:
+                    continue  # 已处理，跳过
+
+                seen_tags.add(tag_key)
                 table_data.append({
                     "Image:Tag": f"{image_ref}:{tag}",
                     "ID (digest)": digest,
