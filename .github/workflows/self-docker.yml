@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/horacecuiorg/dockerfile/ubuntu2204:basesoft  # ← 使用你构建并上传的自定义镜像
+      image: ghcr.io/horacecuiorg/dockerfile/ubuntu2204:latest  # ← 使用你构建并上传的自定义镜像
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock  # ← 挂载宿主 Docker
       options: --privileged  # 如果需要运行 docker buildx，也可以添加
