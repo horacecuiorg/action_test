@@ -11,17 +11,17 @@ on:
         description: 'GHCR 镜像拥有者 (用户名或组织名)。如果提供，将查询 GHCR。'
         required: false
         default: ''
-      ghcr_image_name:
-        description: 'GHCR 镜像名称 (如果要查询指定 GHCR 镜像，需要ghcr_owner)。'
+      ghcr_isUserOrOrg:
+        description: 'GHCR owner 时用户还是组织 '
         required: false
-        default: ''
+        default: false
       use_dockerhub_auth:
         description: '是否使用 Docker Hub 凭据登录 (用于私有仓库或避免速率限制)?'
         type: boolean
         required: true
         default: false
       use_ghcr_auth:
-        description: '是否使用 GHCR 凭据登录 (用于私有仓库或避免速率限制)?'
+        description: '是否使用 ghcr Hub 凭据登录 (用于私有仓库或避免速率限制)?'
         type: boolean
         required: true
         default: false
@@ -86,9 +86,9 @@ jobs:
         id: run_ghcr_script
         run: |
           python public_scripts/ghcr_list_images.py \
-            --owner "${{ inputs.ghcr_owner }}" \
-            --image-name "${{ inputs.ghcr_image_name }}" \
-            --github-token "${{ env.GHCR_PAT_ENV }}" # GHCR 脚本仍然需要 token,但现在从 env 传入
+            --namespace "${{ inputs.dockerhub_namespace }}" \
+            --org \
+            --token "${{ env.GHCR_PAT_ENV }}" # GHCR 脚本仍然需要 token,但现在从 env 传入
 
 
       # --- 结果汇总和使用步骤 (通用) ---
