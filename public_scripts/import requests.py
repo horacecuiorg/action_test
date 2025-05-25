@@ -5,18 +5,35 @@ import sys
 from datetime import datetime
 from urllib.parse import quote
 
-def fetch_packages(namespace, is_org, headers):
-    url = f"https://api.github.com/{'orgs' if is_org else 'users'}/{namespace}/packages?package_type=container"
-    r = requests.get(url, headers=headers)
-    r.raise_for_status()
-    return r.json()
+def fetch_paginated_data(url, headers):
+    all_results = []
+    next_page = url
+    while next_page:
+        try:
+            r = requests.get(next_page, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            all_results.extend(data.get("packages", []) or data.get("results", []) or data)
+            # 处理分页
+            if 'Link' in r.headers:
+                links = r.headers['Link'].split(",")
+                next_url = None
+                for link in links:
+                    if 'rel="next"' in link:
+                        next_url = link[link.find("<")+1:link.find(">")]
+                        break
+                next_page = next_url
+            else:
+                next_page = None
+        except requests.RequestException as e:
+            print(f"❌ 请求失败: {e}", file=sys.stderr)
+            break
+    return all_results
 
 def fetch_versions(namespace, pkg_name, is_org, headers):
     encoded_name = quote(pkg_name, safe='')
     url = f"https://api.github.com/{'orgs' if is_org else 'users'}/{namespace}/packages/container/{encoded_name}/versions"
-    r = requests.get(url, headers=headers)
-    r.raise_for_status()
-    return r.json()
+    return fetch_paginated_data(url, headers)
 
 def main():
     parser = argparse.ArgumentParser(description="List GHCR container packages for a namespace.")
@@ -29,6 +46,7 @@ def main():
         "Authorization": f"Bearer {args.token}",
         "Accept": "application/vnd.github+json"
     }
+
     if not args.namespace:
         print("错误: --namespace 不能为空", file=sys.stderr)
         sys.exit(1)
@@ -37,9 +55,11 @@ def main():
     print("-" * 50)
 
     try:
-        packages = fetch_packages(args.namespace, args.org, headers)
+        packages = fetch_paginated_data(
+            f"https://api.github.com/{'orgs' if args.org else 'users'}/{args.namespace}/packages?package_type=container",
+            headers)
     except requests.HTTPError as e:
-        print(f"❌ 获取包列表失败: {e}")
+        print(f"❌ 获取包列表失败: {e}", file=sys.stderr)
         sys.exit(1)
 
     if not packages:
@@ -52,13 +72,14 @@ def main():
 
     results = []
     table_data = []
+
     for pkg in packages:
         name = pkg.get("name")
         print(f"📦 镜像: ghcr.io/{args.namespace}/{name}")
         try:
             versions = fetch_versions(args.namespace, name, args.org, headers)
         except requests.HTTPError as e:
-            print(f"  ❌ 获取版本失败: {e}")
+            print(f"  ❌ 获取版本失败: {e}", file=sys.stderr)
             continue
 
         if not versions:
@@ -86,10 +107,11 @@ def main():
             tag_names = version.get("metadata", {}).get("container", {}).get("tags", [])
             if not tag_names:
                 tag_names = ["latest"]
+
             pushed_at = version.get("updated_at") or version.get("created_at") or "N/A"
             digest = version.get("name") or "N/A"
             size_bytes = version.get("metadata", {}).get("container", {}).get("size", 0)
-            size_mb = round(size_bytes / (1024 * 1024), 2)
+            size_mb = float(size_bytes) / (1024 * 1024) if size_bytes else 0.0
 
             formatted_pushed_at = "N/A"
             if pushed_at != "N/A":
@@ -98,8 +120,10 @@ def main():
                     formatted_pushed_at = dt_object.strftime("%Y-%m-%d %H:%M:%S UTC")
                 except Exception:
                     formatted_pushed_at = pushed_at
+
             arch_str = "N/A"
-            architectures = []
+            architectures = []  # 这里保持空列表，跟dockerhub脚本一致
+
             for tag in tag_names:
                 image_ref = f"ghcr.io/{args.namespace}/{name}"
                 table_data.append({
