@@ -18,12 +18,12 @@ on:
       use_dockerhub_auth:
         description: '是否使用 Docker Hub 凭据登录 (用于私有仓库或避免速率限制)?'
         type: boolean
-        required: true
+        required: false
         default: false
       use_ghcr_auth:
         description: '是否使用 ghcr Hub 凭据登录 (用于私有仓库或避免速率限制)?'
         type: boolean
-        required: true
+        required: false
         default: false
 
 jobs:
