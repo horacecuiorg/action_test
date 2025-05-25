@@ -17,6 +17,8 @@ jobs:
       - name: 查看信息
         run: |
           whoami
+          pwd
+          ls -al /
 
 
 
