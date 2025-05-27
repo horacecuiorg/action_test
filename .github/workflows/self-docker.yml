@@ -20,6 +20,7 @@ jobs:
       - name: 查看信息
         run: |
           whoami
+          id
           pwd
           ls -al /
           echo "Permissions and ownership of /__w/ before steps are run:"
