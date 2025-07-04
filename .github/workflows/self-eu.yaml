@@ -15,7 +15,7 @@ on:
 
 jobs:
   build:
-    runs-on: [eu]
+    runs-on: [self-hosted, Linux, X64, eu] 
 
     steps:
       - uses: actions/checkout@v4
