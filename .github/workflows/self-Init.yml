@@ -1,5 +1,5 @@
 
-name: euInit2
+name: self-Init
 on:
   workflow_dispatch:
     inputs:
