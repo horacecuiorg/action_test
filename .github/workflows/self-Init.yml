@@ -1,0 +1,84 @@
+
+name: euInit2
+on:
+  workflow_dispatch:
+    inputs:
+      ssh_addr:
+        description: '远程服务器地址（默认 	1:1:1:1:1:1:1:1'
+        required: false
+        default: '1:1:1:1:1:1:1:1'
+      ssh_user:
+        description: '远程服务器用户名（默认 root)'
+        required: false
+        default: 'root'
+      ssh_port:
+        description: 'SSH 端口（默认 22)'
+        required: false
+        default: '22'
+      new_username:
+        description: '要创建的新用户名（默认 cyh'
+        required: true
+        default: 'cyh'
+      ssh_password:
+        description: '远程用户密码'
+        required: true
+      ssh_new_port:
+        description: 'SSH 新端口（默认 30015)'
+        required: false
+        default: '30044'
+
+jobs:
+   remote-ssh:  
+    runs-on: [self-hosted, Linux, X64, eu] 
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 📦 Init
+        env:
+          HOST_IP: ${{ github.event.inputs.ssh_addr }}     # IP 地址
+          SSH_USER: ${{ github.event.inputs.ssh_user }}     # 用户名
+          SSH_PASS: ${{ github.event.inputs.ssh_password }}      # 密码
+          SSH_PORT: ${{ github.event.inputs.ssh_port }}      # 端口
+        run: |
+          sudo apt update && sudo apt install -y sshpass
+          echo ${GITHUB_WORKSPACE}
+          cd ${GITHUB_WORKSPACE}/eu
+          cp config_init config_new
+          sed -i "s/^[[:space:]]*HostName .*/    HostName $HOST_IP/" config_new
+          sed -i "s/^[[:space:]]*Port .*/    Port $SSH_PORT/" config_new
+          sed -i "s/^[[:space:]]*User .*/    User $SSH_USER/" config_new
+          ls -al
+          cat config_new
+          echo "📂 准备打包文件..."
+          tar czf scripts.tar.gz ./*
+          echo "📤 使用 scp 发送脚本到远程服务器..."
+          sshpass -p "$SSH_PASS" scp -F config_new scripts.tar.gz "myServer:/tmp/"
+          echo "📤 成功..."
+
+      - name: SSH to remote IPv6 server using password
+        env:
+          SSH_PASS: ${{ github.event.inputs.ssh_password }}      # 密码
+          TARGET_USER: ${{ github.event.inputs.new_username }} 
+          SSH_NEW_PORT: ${{ github.event.inputs.ssh_new_port }} 
+        run: |
+          echo "🔐 Connecting to HOST..."
+          cd ${GITHUB_WORKSPACE}/eu
+          sshpass -p "$SSH_PASS" ssh -F config_new myServer bash <<EOF
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt update && apt upgrade -y
+            apt update && apt install -y sudo curl 
+            cd /tmp
+            tar xf scripts.tar.gz
+            ls
+            chmod +x *.sh
+            echo "✅ 正在执行脚本..."
+            echo "$TARGET_USER"
+            echo "$SSH_NEW_PORT"
+            ./addUser.sh "$TARGET_USER"
+            ./harden_ssh.sh "$SSH_NEW_PORT"
+          EOF
+          echo "🔐 Connecting to HOST END..."
+
+
+

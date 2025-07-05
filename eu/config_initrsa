@@ -1,0 +1,7 @@
+Host myServer
+    HostName myServerIp
+    Port sshPort
+    User myUser
+    StrictHostKeyChecking no
+    IdentityFile ~/.ssh/id_rsa
+    UserKnownHostsFile /dev/null

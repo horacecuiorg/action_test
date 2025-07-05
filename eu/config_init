@@ -1,0 +1,6 @@
+Host myServer
+    HostName myServerIp
+    Port sshPort
+    User myUser
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
