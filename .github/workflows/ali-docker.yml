@@ -48,29 +48,36 @@ jobs:
         run: |
           OLD_IMAGE="${{ env.ACTUAL_OLD_IMAGE }}" # 使用上一步骤获取的实际镜像名称
           
-          # 从 ACTUAL_OLD_IMAGE 中分离出镜像名和标签
-          # 使用 rev | cut | rev 技巧来处理可能包含多个冒号的私有仓库镜像名
-          IMAGE_TAG=$(echo "${OLD_IMAGE}" | rev | cut -d':' -f1 | rev) # 获取最后一个冒号后的部分作为标签
-          IMAGE_FULL_NAME=$(echo "${OLD_IMAGE}" | sed "s/:${IMAGE_TAG}$//") # 获取标签之前的完整镜像名
+          IMAGE_TAG=$(echo "${OLD_IMAGE}" | rev | cut -d':' -f1 | rev)
+          IMAGE_FULL_NAME=$(echo "${OLD_IMAGE}" | sed "s/:${IMAGE_TAG}$//")
 
           echo "提取的镜像完整名称 (不含tag): ${IMAGE_FULL_NAME}"
           echo "提取的镜像标签: ${IMAGE_TAG}"
-          
-          # 判断是官方镜像还是第三方镜像
-          if [[ "${IMAGE_FULL_NAME}" == * "/" * ]]; then
-            # 第三方镜像，例如 gitea/act_runner
-            # 将斜杠替换为下划线
-            MIRROR_IMAGE_NAME=$(echo ${IMAGE_FULL_NAME} | sed 's/\//_/g')
-            NEW_IMAGE="registry.cn-shanghai.aliyuncs.com/${{ vars.ALIYUN_NAMESPACE3 }}/${MIRROR_IMAGE_NAME}:${IMAGE_TAG}"
-          else
-            # 官方镜像，例如 mysql
-            NEW_IMAGE="registry.cn-shanghai.aliyuncs.com/${{ vars.ALIYUN_NAMESPACE3 }}/${IMAGE_FULL_NAME}:${IMAGE_TAG}"
+
+          # --- 新增的标准化逻辑 ---
+          PROCESSED_IMAGE_NAME="${IMAGE_FULL_NAME}"
+
+          # 1. 移除 'docker.io/library/' 前缀
+          if [[ "${PROCESSED_IMAGE_NAME}" == "docker.io/library/"* ]]; then
+            PROCESSED_IMAGE_NAME="${PROCESSED_IMAGE_NAME#docker.io/library/}"
+            echo "移除 'docker.io/library/' 前缀后: ${PROCESSED_IMAGE_NAME}"
           fi
+
+          # 2. 移除 'docker.io/' 前缀，并将斜杠替换为下划线
+          if [[ "${PROCESSED_IMAGE_NAME}" == "docker.io/"* ]]; then
+            PROCESSED_IMAGE_NAME="${PROCESSED_IMAGE_NAME#docker.io/}"
+            PROCESSED_IMAGE_NAME=$(echo "${PROCESSED_IMAGE_NAME}" | sed 's/\//_/g')
+            echo "移除 'docker.io/' 并替换斜杠后: ${PROCESSED_IMAGE_NAME}"
+          fi
+          # --- 标准化逻辑结束 ---
+          
+          # 根据标准化后的名称构建新的镜像路径
+          NEW_IMAGE="registry.cn-shanghai.aliyuncs.com/${{ vars.ALIYUN_NAMESPACE3 }}/${PROCESSED_IMAGE_NAME}:${IMAGE_TAG}"
 
           docker tag ${OLD_IMAGE} ${NEW_IMAGE}
           echo "原始镜像: ${OLD_IMAGE}"
           echo "新镜像: ${NEW_IMAGE}"
-          echo "NEW_IMAGE=${NEW_IMAGE}" >> $GITHUB_ENV # 将NEW_IMAGE设置为环境变量，供后续步骤使用
+          echo "NEW_IMAGE=${NEW_IMAGE}" >> $GITHUB_ENV
           docker images
           
 
