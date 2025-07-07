@@ -32,25 +32,7 @@ jobs:
           # 从拉取输出的最后一行尝试提取实际的 REPOSITORY:TAG
           # 针对 "docker.io/library/hello-world:latest" 这种格式进行提取
           ACTUAL_OLD_IMAGE=$(echo "${PULL_OUTPUT}" | tail -n 1 | awk '{print $1}')
-          
-          # 如果直接提取失败，回退到使用原始输入并尝试添加:latest（以防Docker行为变化）
-          if [[ "${ACTUAL_OLD_IMAGE}" == *"Downloaded newer image for"* || "${ACTUAL_OLD_IMAGE}" == *"Image is up to date"* ]]; then
-             # 如果是 "Downloaded newer image for hello-world:latest" 或 "Image is up to date for hello-world:latest"
-             # 那么实际的镜像名称就在这行信息中
-             ACTUAL_OLD_IMAGE=$(echo "${PULL_OUTPUT}" | tail -n 1 | sed -E 's/.*(Downloaded newer image for|Image is up to date for) ([^ ]+)/\2/')
-          fi
-
-          # 最终校验，如果还是没获取到，则尝试从原始输入构建 (应对极少数情况，或非latest且没有显式tag的情况)
-          if [ -z "${ACTUAL_OLD_IMAGE}" ] || [[ "${ACTUAL_OLD_IMAGE}" != * ":"* ]]; then
-              echo "警告：未能从docker pull输出中完全解析镜像名和标签，尝试从原始输入构建。"
-              # 再次检查原始输入是否包含冒号，如果不是则默认为 :latest
-              if [[ "${ORIGINAL_INPUT_IMAGE}" != * ":"* ]]; then
-                 ACTUAL_OLD_IMAGE="${ORIGINAL_INPUT_IMAGE}:latest"
-              else
-                 ACTUAL_OLD_IMAGE="${ORIGINAL_INPUT_IMAGE}"
-              fi
-          fi
-
+          echo $ACTUAL_OLD_IMAGE 
 
           if [ -z "${ACTUAL_OLD_IMAGE}" ]; then
               echo "错误：未能获取到实际拉取的镜像名称。请检查输入是否正确或镜像是否存在。"
