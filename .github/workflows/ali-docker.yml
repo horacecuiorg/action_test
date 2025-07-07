@@ -21,8 +21,8 @@ jobs:
       # 拉取 Docker Hub 上的镜像
       - name: Pull image from Docker Hub
         run: |
-          # 检查 dockerhub_image 是否包含标签
           OLD_IMAGE="${{ github.event.inputs.dockerhub_image }}"
+          # 检查 OLD_IMAGE 是否包含标签
           if [[ "${OLD_IMAGE}" != * ":"* ]]; then
             # 如果没有标签，默认添加 :latest
             OLD_IMAGE="${OLD_IMAGE}:latest"
