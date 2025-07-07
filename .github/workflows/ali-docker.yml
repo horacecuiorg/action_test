@@ -18,29 +18,43 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      # 拉取 Docker Hub 上的镜像
-      - name: Pull image from Docker Hub
+      # 拉取 Docker Hub 上的镜像并获取实际名称和标签
+      - name: Pull image from Docker Hub and Get Actual Image Name
+        id: pull_image # 给这个步骤一个ID，方便引用其输出
         run: |
-          OLD_IMAGE="${{ github.event.inputs.dockerhub_image }}"
-          # 检查 OLD_IMAGE 是否包含标签
-          if [[ "${OLD_IMAGE}" != * ":"* ]]; then
-            # 如果没有标签，默认添加 :latest
-            OLD_IMAGE="${OLD_IMAGE}:latest"
-            echo "检测到未指定标签，自动使用 ${OLD_IMAGE}"
+          ORIGINAL_INPUT_IMAGE="${{ github.event.inputs.dockerhub_image }}"
+          echo "将要拉取镜像: ${ORIGINAL_INPUT_IMAGE}"
+          docker pull ${ORIGINAL_INPUT_IMAGE}
+          
+          # 获取实际拉取到的镜像ID，因为一个镜像可能对应多个Tag
+          IMAGE_ID=$(docker images --format "{{.ID}}" "${ORIGINAL_INPUT_IMAGE}" | head -n 1)
+          
+          # 根据镜像ID查找其完整的 REPOSITORY:TAG 名称
+          # 使用 grep -w 确保精确匹配，防止部分匹配导致错误
+          # awk '{print $1":"$2}' 提取 REPOSITORY:TAG
+          ACTUAL_OLD_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -w "${IMAGE_ID}" | head -n 1)
+
+          if [ -z "${ACTUAL_OLD_IMAGE}" ]; then
+              echo "错误：未能获取到实际拉取的镜像名称。请检查输入是否正确或镜像是否存在。"
+              exit 1
           fi
-          echo "将要拉取镜像: ${OLD_IMAGE}"
-          docker pull ${OLD_IMAGE}
-          echo "OLD_IMAGE=${OLD_IMAGE}" >> $GITHUB_ENV # 将处理后的 OLD_IMAGE 设为环境变量
+
+          echo "实际拉取的原始镜像名称为: ${ACTUAL_OLD_IMAGE}"
+          echo "ACTUAL_OLD_IMAGE=${ACTUAL_OLD_IMAGE}" >> $GITHUB_ENV # 将实际镜像名称设为环境变量
+          docker images # 打印所有镜像，方便调试
           
       # 给镜像打上新标签
       - name: Retag Docker image
         run: |
-          docker images
-          OLD_IMAGE="${{ env.OLD_IMAGE }}" # 使用环境变量中处理过的 OLD_IMAGE
+          OLD_IMAGE="${{ env.ACTUAL_OLD_IMAGE }}" # 使用上一步骤获取的实际镜像名称
           
-          # 从 OLD_IMAGE 中分离出镜像名和标签
-          IMAGE_FULL_NAME=$(echo ${OLD_IMAGE} | cut -d':' -f1) # 例如 mysql 或 gitea/act_runner
-          IMAGE_TAG=$(echo ${OLD_IMAGE} | cut -d':' -f2) # 例如 latest 或 1.2.3
+          # 从 ACTUAL_OLD_IMAGE 中分离出镜像名和标签
+          # 使用 rev | cut | rev 技巧来处理可能包含多个冒号的私有仓库镜像名
+          IMAGE_TAG=$(echo "${OLD_IMAGE}" | rev | cut -d':' -f1 | rev) # 获取最后一个冒号后的部分作为标签
+          IMAGE_FULL_NAME=$(echo "${OLD_IMAGE}" | sed "s/:${IMAGE_TAG}$//") # 获取标签之前的完整镜像名
+
+          echo "提取的镜像完整名称 (不含tag): ${IMAGE_FULL_NAME}"
+          echo "提取的镜像标签: ${IMAGE_TAG}"
           
           # 判断是官方镜像还是第三方镜像
           if [[ "${IMAGE_FULL_NAME}" == * "/" * ]]; then
@@ -58,8 +72,9 @@ jobs:
           echo "新镜像: ${NEW_IMAGE}"
           echo "NEW_IMAGE=${NEW_IMAGE}" >> $GITHUB_ENV # 将NEW_IMAGE设置为环境变量，供后续步骤使用
           docker images
+          
 
-    # 推送
+      # 推送
       - name: Login to Aliyun Docker Registry and Push Image
         run: |
           echo "${{ secrets.ALIYUN_PASSWORD }}" | docker login -u "${{ secrets.ALIYUN_USERNAME }}" registry.cn-shanghai.aliyuncs.com --password-stdin
