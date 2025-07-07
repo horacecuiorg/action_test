@@ -1,0 +1,67 @@
+# This is a basic workflow to help you get started with Actions
+
+name: ali-docker
+on:
+  workflow_dispatch:
+    inputs:
+      dockerhub_image:
+        description: 'Docker Hub 镜像名称 (全名，包括用户名/组织名和镜像名，如 mysql 或 gitea/act_runner:1.2.3)'
+        required: true
+        type: string
+        default: 'hello-world' # 默认值改为不带tag，自动处理latest
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # 拉取 Docker Hub 上的镜像
+      - name: Pull image from Docker Hub
+        run: |
+          # 检查 dockerhub_image 是否包含标签
+          OLD_IMAGE="${{ github.event.inputs.dockerhub_image }}"
+          if [[ "${OLD_IMAGE}" != * ":"* ]]; then
+            # 如果没有标签，默认添加 :latest
+            OLD_IMAGE="${OLD_IMAGE}:latest"
+            echo "检测到未指定标签，自动使用 ${OLD_IMAGE}"
+          fi
+          echo "将要拉取镜像: ${OLD_IMAGE}"
+          docker pull ${OLD_IMAGE}
+          echo "OLD_IMAGE=${OLD_IMAGE}" >> $GITHUB_ENV # 将处理后的 OLD_IMAGE 设为环境变量
+          
+      # 给镜像打上新标签
+      - name: Retag Docker image
+        run: |
+          docker images
+          OLD_IMAGE="${{ env.OLD_IMAGE }}" # 使用环境变量中处理过的 OLD_IMAGE
+          
+          # 从 OLD_IMAGE 中分离出镜像名和标签
+          IMAGE_FULL_NAME=$(echo ${OLD_IMAGE} | cut -d':' -f1) # 例如 mysql 或 gitea/act_runner
+          IMAGE_TAG=$(echo ${OLD_IMAGE} | cut -d':' -f2) # 例如 latest 或 1.2.3
+          
+          # 判断是官方镜像还是第三方镜像
+          if [[ "${IMAGE_FULL_NAME}" == * "/" * ]]; then
+            # 第三方镜像，例如 gitea/act_runner
+            # 将斜杠替换为下划线
+            MIRROR_IMAGE_NAME=$(echo ${IMAGE_FULL_NAME} | sed 's/\//_/g')
+            NEW_IMAGE="registry.cn-shanghai.aliyuncs.com/${{ vars.ALIYUN_NAMESPACE3 }}/${MIRROR_IMAGE_NAME}:${IMAGE_TAG}"
+          else
+            # 官方镜像，例如 mysql
+            NEW_IMAGE="registry.cn-shanghai.aliyuncs.com/${{ vars.ALIYUN_NAMESPACE3 }}/${IMAGE_FULL_NAME}:${IMAGE_TAG}"
+          fi
+
+          docker tag ${OLD_IMAGE} ${NEW_IMAGE}
+          echo "原始镜像: ${OLD_IMAGE}"
+          echo "新镜像: ${NEW_IMAGE}"
+          echo "NEW_IMAGE=${NEW_IMAGE}" >> $GITHUB_ENV # 将NEW_IMAGE设置为环境变量，供后续步骤使用
+          docker images
+
+    # 推送
+      - name: Login to Aliyun Docker Registry and Push Image
+        run: |
+          echo "${{ secrets.ALIYUN_PASSWORD }}" | docker login -u "${{ secrets.ALIYUN_USERNAME }}" registry.cn-shanghai.aliyuncs.com --password-stdin
+          echo "正在推送镜像: ${{ env.NEW_IMAGE }}"
+          docker push ${{ env.NEW_IMAGE }}
