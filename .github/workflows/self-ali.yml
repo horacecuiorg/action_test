@@ -19,6 +19,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        env:
+          http_proxy: http://127.0.0.1:20171
+          https_proxy: http://127.0.0.1:20171
 
       - name: Run a one-line script
         run: echo Hello, world!
