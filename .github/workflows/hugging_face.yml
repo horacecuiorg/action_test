@@ -1,0 +1,12 @@
+name: Keep HF Space Alive
+on:
+  schedule:
+    - cron: '*/20 * * * *' # 每20分钟跑一次
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Space
+        run: |
+          curl -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" https://horaceCui-httpReq.hf.space
